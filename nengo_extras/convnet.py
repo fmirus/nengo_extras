@@ -1,5 +1,6 @@
 import numpy as np
 
+import nengo
 from nengo.exceptions import ValidationError
 from nengo.processes import Process
 from nengo.params import (EnumParam, NdarrayParam, Parameter, TupleParam,
@@ -209,6 +210,70 @@ class Pool2d(Process):
             return y.ravel()
 
         return step_pool2d
+
+
+class PresentImages(nengo.processes.PresentInput):
+    image_shape = ShapeParam('image_shape', length=3, low=1)
+
+    def __init__(self, images, presentation_time, **kwargs):
+        self.image_shape = images.shape[1:]
+        super(PresentImages, self).__init__(
+            images, presentation_time, **kwargs)
+
+    def _nengo_html_function_(self, t, x):
+        import base64
+        import PIL
+        import cStringIO
+
+        values = x.reshape(self.image_shape)
+        values = values.transpose((1, 2, 0))  # colour channel last
+        values = values * 255.
+        values = values.astype('uint8')
+
+        if values.shape[-1] == 1:
+            values = values[:, :, 0]
+
+        png = PIL.Image.fromarray(values)
+        buffer = cStringIO.StringIO()
+        png.save(buffer, format="PNG")
+        img_str = base64.b64encode(buffer.getvalue())
+
+        return '''
+            <svg width="100%%" height="100%%" viewbox="0 0 100 100">
+            <image width="100%%" height="100%%"
+                   xlink:href="data:image/png;base64,%s"
+                   style="image-rendering: pixelated;">
+            </svg>''' % (''.join(img_str))
+
+    # def make_html_function(self, size):
+    #     import base64
+    #     import PIL
+    #     import cStringIO
+    #     image_shape = self.image_shape
+    #     assert np.prod(image_shape) == size
+
+    #     def html_presentimages(t, x):
+    #         values = x.reshape(image_shape)
+    #         values = values.transpose((1, 2, 0))  # colour channel last
+    #         values = values * 255.
+    #         values = values.astype('uint8')
+
+    #         if values.shape[-1] == 1:
+    #             values = values[:, :, 0]
+
+    #         png = PIL.Image.fromarray(values)
+    #         buffer = cStringIO.StringIO()
+    #         png.save(buffer, format="PNG")
+    #         img_str = base64.b64encode(buffer.getvalue())
+
+    #         return '''
+    #             <svg width="100%%" height="100%%" viewbox="0 0 100 100">
+    #             <image width="100%%" height="100%%"
+    #                    xlink:href="data:image/png;base64,%s"
+    #                    style="image-rendering: pixelated;">
+    #             </svg>''' % (''.join(img_str))
+
+    #     return html_presentimages
 
 
 def softmax(x, axis=None):
